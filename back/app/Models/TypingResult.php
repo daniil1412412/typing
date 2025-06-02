@@ -10,8 +10,6 @@ class TypingResult extends Model
     use HasFactory;
 
     protected $fillable = ['user_id', 'wpm', 'accuracy', 'errors', 'duration', 'raw_text', 'input_text'];
-
-    // Определение отношения "принадлежит пользователю"
     public function user()
     {
         return $this->belongsTo(User::class);

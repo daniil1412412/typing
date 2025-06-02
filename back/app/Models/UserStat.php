@@ -13,8 +13,6 @@ class UserStat extends Model
 {
     return $this->belongsTo(User::class);
 }
-
-
     protected $fillable = [
         'user_id',
         'best_wpm',

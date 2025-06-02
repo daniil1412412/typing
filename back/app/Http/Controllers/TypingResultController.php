@@ -12,67 +12,67 @@ use Illuminate\Support\Facades\File;
 
 class TypingResultController extends Controller
 {
-public function store(Request $request)
-{
-    $validated = $request->validate([
-        'wpm' => 'required|numeric',
-        'accuracy' => 'required|numeric',
-        'errors' => 'required|numeric',
-        'duration' => 'required|numeric',
-        'raw_text' => 'required|string',
-        'input_text' => 'required|string',
-        'error_log' => 'nullable|array',
-        'error_log.*.char_index' => 'required|integer',
-        'error_log.*.expected' => 'nullable|string|size:1',
-        'error_log.*.actual' => 'nullable|string|size:1',
-    ]);
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'wpm' => 'required|numeric',
+            'accuracy' => 'required|numeric',
+            'errors' => 'required|numeric',
+            'duration' => 'required|numeric',
+            'raw_text' => 'required|string',
+            'input_text' => 'required|string',
+            'error_log' => 'nullable|array',
+            'error_log.*.char_index' => 'required|integer',
+            'error_log.*.expected' => 'nullable|string|size:1',
+            'error_log.*.actual' => 'nullable|string|size:1',
+        ]);
 
-    $userId = Auth::id();
-    $typingResult = TypingResult::create([
-        'user_id' => $userId,
-        'wpm' => $validated['wpm'],
-        'accuracy' => $validated['accuracy'],
-        'errors' => $validated['errors'],
-        'duration' => $validated['duration'],
-        'raw_text' => $validated['raw_text'],
-        'input_text' => $validated['input_text'],
-    ]);
-    if (!empty($validated['error_log'])) {
-        foreach ($validated['error_log'] as $error) {
-            if (!empty($error['expected']) && !empty($error['actual'])) {
-                $typingResult->errorLogs()->create($error);
+        $userId = Auth::id();
+        $typingResult = TypingResult::create([
+            'user_id' => $userId,
+            'wpm' => $validated['wpm'],
+            'accuracy' => $validated['accuracy'],
+            'errors' => $validated['errors'],
+            'duration' => $validated['duration'],
+            'raw_text' => $validated['raw_text'],
+            'input_text' => $validated['input_text'],
+        ]);
+        if (!empty($validated['error_log'])) {
+            foreach ($validated['error_log'] as $error) {
+                if (!empty($error['expected']) && !empty($error['actual'])) {
+                    $typingResult->errorLogs()->create($error);
+                }
             }
         }
+        $oldResults = TypingResult::where('user_id', $userId)
+            ->orderByDesc('created_at')
+            ->skip(5)
+            ->take(PHP_INT_MAX)
+            ->get();
+
+        foreach ($oldResults as $result) {
+            $result->errorLogs()->delete();
+            $result->delete();
+        }
+        $stat = UserStat::firstOrNew(['user_id' => $userId]);
+        if (!$stat->best_wpm || $validated['wpm'] > $stat->best_wpm) {
+            $stat->best_wpm = $validated['wpm'];
+        }
+        $stat->total_tests = ($stat->total_tests ?? 0) + 1;
+        $lastAccuracies = TypingResult::where('user_id', $userId)
+            ->orderByDesc('created_at')
+            ->take(5)
+            ->pluck('accuracy');
+
+        $stat->avg_accuracy = $lastAccuracies->avg();
+
+        $stat->save();
+
+        return response()->json([
+            'message' => 'Result saved successfully!',
+            'data' => $typingResult
+        ], 201);
     }
-    $oldResults = TypingResult::where('user_id', $userId)
-        ->orderByDesc('created_at')
-        ->skip(5)
-        ->take(PHP_INT_MAX)
-        ->get();
-
-    foreach ($oldResults as $result) {
-        $result->errorLogs()->delete();
-        $result->delete();
-    }
-    $stat = UserStat::firstOrNew(['user_id' => $userId]);
-    if (!$stat->best_wpm || $validated['wpm'] > $stat->best_wpm) {
-        $stat->best_wpm = $validated['wpm'];
-    }
-    $stat->total_tests = ($stat->total_tests ?? 0) + 1;
-    $lastAccuracies = TypingResult::where('user_id', $userId)
-        ->orderByDesc('created_at')
-        ->take(5)
-        ->pluck('accuracy');
-
-    $stat->avg_accuracy = $lastAccuracies->avg();
-
-    $stat->save();
-
-    return response()->json([
-        'message' => 'Result saved successfully!',
-        'data' => $typingResult
-    ], 201);
-}
 
 
     public function index(Request $request)
@@ -99,37 +99,35 @@ public function store(Request $request)
 
         return response()->json($stats);
     }
-    public function leaderboard()
-{
-   $leaders = UserStat::with('user')->orderBy('best_wpm', 'desc')->limit(10)->get();
+        public function leaderboard()
+    {
+    $leaders = UserStat::with('user')->orderBy('best_wpm', 'desc')->limit(10)->get();
 
 
-    return response()->json(['data' => $leaders]);
-}
-
-    private function filterWords(array $words): array
-{
-    return array_values(array_filter($words, function($word) {
-        return preg_match('/^[а-яёa-z]+$/iu', $word);
-    }));
-}
- private function loadDictionary(string $lang): array
-{
-    $path = storage_path("app/dictionaries/{$lang}.txt");
-    if (!File::exists($path)) {
-        return [];
+        return response()->json(['data' => $leaders]);
     }
 
-    $words = File::lines($path)
-        ->filter(fn($line) => trim($line) !== '')
-        ->map(fn($line) => trim($line))
-        ->toArray();
-    $words = $this->filterWords($words);
-    
-    return $words;
-}
+        private function filterWords(array $words): array
+    {
+        return array_values(array_filter($words, function($word) {
+            return preg_match('/^[а-яёa-z]+$/iu', $word);
+        }));
+    }
+    private function loadDictionary(string $lang): array
+    {
+        $path = storage_path("app/dictionaries/{$lang}.txt");
+        if (!File::exists($path)) {
+            return [];
+        }
 
-
+        $words = File::lines($path)
+            ->filter(fn($line) => trim($line) !== '')
+            ->map(fn($line) => trim($line))
+            ->toArray();
+        $words = $this->filterWords($words);
+        
+        return $words;
+    }
     private function getRandomText(string $lang, int $wordCount = 50): string
     {
         $words = $this->loadDictionary($lang);
@@ -142,9 +140,8 @@ public function store(Request $request)
 
     public function getText(Request $request): JsonResponse
     {
-        $lang = $request->query('lang', 'ru'); // по умолчанию русский
+        $lang = $request->query('lang', 'ru');
         $text = $this->getRandomText($lang, 50);
-
         if (!$text) {
             return response()->json(['error' => 'Словарь для выбранного языка не найден.'], 404);
         }
@@ -153,15 +150,17 @@ public function store(Request $request)
     }
 
     public function getAdaptiveText(Request $request): JsonResponse
-    {
+    {   
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Необходимо войти в систему.'], 401);
+        }
         $lang = $request->query('lang', 'ru');
         $words = $this->loadDictionary($lang);
         if (empty($words)) {
             return response()->json(['error' => 'Словарь для выбранного языка не найден.'], 404);
         }
-
         $user = $request->user();
-
         $errors = DB::table('error_logs')
             ->join('typing_results', 'error_logs.result_id', '=', 'typing_results.id')
             ->where('typing_results.user_id', $user->id)
@@ -221,4 +220,19 @@ public function store(Request $request)
 
         return response()->json($errors);
     }
+    public function getTextByWords(Request $request): JsonResponse
+    {
+        $lang = $request->query('lang', 'en');
+        $count = (int) $request->query('count', 35);
+        $words = $this->loadDictionary($lang);
+
+        if (empty($words)) {
+            return response()->json(['error' => 'Словарь для выбранного языка не найден.'], 404);
+        }
+        shuffle($words);
+        $text = implode(' ', array_slice($words, 0, $count));
+
+        return response()->json(['text' => $text]);
+    }
+
 }

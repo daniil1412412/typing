@@ -10,8 +10,7 @@ class ErrorLog extends Model
     use HasFactory;
 
     protected $fillable = ['result_id', 'char_index', 'expected', 'actual'];
-
-    public function result()
+        public function result()
     {
         return $this->belongsTo(TypingResult::class, 'result_id');
     }
