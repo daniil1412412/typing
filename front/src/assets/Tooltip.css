@@ -1,0 +1,30 @@
+/* Добавьте это в ваш CSS */
+.wpm-tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+}
+
+.wpm-tooltip .tooltip-text {
+  visibility: hidden;
+  width: 200px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 12px;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.wpm-tooltip:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}

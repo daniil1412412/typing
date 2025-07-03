@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('typing_results', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('set null');
+            $table->string('test_type');
             $table->integer('wpm');
             $table->float('accuracy');
             $table->integer('errors');

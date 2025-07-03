@@ -18,7 +18,14 @@ class UserStat extends Model
         'best_wpm',
         'avg_accuracy',
         'total_tests',
+        'test_type'
     ];
-
+    public function recentResults()
+    {
+        return $this->hasMany(UserStat::class);
+    }
     public $timestamps = false;
+    protected $casts = [
+    'top_results' => 'array',
+];
 }

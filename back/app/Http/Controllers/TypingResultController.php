@@ -14,19 +14,19 @@ class TypingResultController extends Controller
 {
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'wpm' => 'required|numeric',
-            'accuracy' => 'required|numeric',
-            'errors' => 'required|numeric',
-            'duration' => 'required|numeric',
-            'raw_text' => 'required|string',
-            'input_text' => 'required|string',
-            'error_log' => 'nullable|array',
-            'error_log.*.char_index' => 'required|integer',
-            'error_log.*.expected' => 'nullable|string|size:1',
-            'error_log.*.actual' => 'nullable|string|size:1',
+          $validated = $request->validate([
+        'wpm' => 'required|numeric',
+        'accuracy' => 'required|numeric',
+        'errors' => 'required|numeric',
+        'duration' => 'required|numeric',
+        'raw_text' => 'required|string',
+        'input_text' => 'required|string',
+        'test_type' => 'required|string|in:timed,word,adaptive,numbers',
+        'error_log' => 'nullable|array',
+        'error_log.*.char_index' => 'required|integer',
+        'error_log.*.expected' => 'nullable|string|size:1',
+        'error_log.*.actual' => 'nullable|string|size:1',
         ]);
-
         $userId = Auth::id();
         $typingResult = TypingResult::create([
             'user_id' => $userId,
@@ -36,6 +36,7 @@ class TypingResultController extends Controller
             'duration' => $validated['duration'],
             'raw_text' => $validated['raw_text'],
             'input_text' => $validated['input_text'],
+            'test_type' => $validated['test_type'], 
         ]);
         if (!empty($validated['error_log'])) {
             foreach ($validated['error_log'] as $error) {
@@ -53,18 +54,30 @@ class TypingResultController extends Controller
         foreach ($oldResults as $result) {
             $result->errorLogs()->delete();
             $result->delete();
-        }
+        } 
         $stat = UserStat::firstOrNew(['user_id' => $userId]);
+
         if (!$stat->best_wpm || $validated['wpm'] > $stat->best_wpm) {
             $stat->best_wpm = $validated['wpm'];
+            $stat->test_type = $validated['test_type'];
         }
         $stat->total_tests = ($stat->total_tests ?? 0) + 1;
         $lastAccuracies = TypingResult::where('user_id', $userId)
             ->orderByDesc('created_at')
             ->take(5)
             ->pluck('accuracy');
-
         $stat->avg_accuracy = $lastAccuracies->avg();
+        $topWpmResults = TypingResult::where('user_id', $userId)
+            ->orderByDesc('wpm')
+            ->take(10)
+            ->get(['wpm', 'accuracy', 'created_at']);
+        $stat->top_results = $topWpmResults->map(function ($result) {
+            return [
+                'wpm' => $result->wpm,
+                'accuracy' => $result->accuracy,
+                'created_at' => $result->created_at->toDateTimeString(),
+            ];
+        });
 
         $stat->save();
 
@@ -83,7 +96,7 @@ class TypingResultController extends Controller
 
         return response()->json($results);
     }
-     public function stats()
+    public function stats()
     {
         $user = Auth::user();
 
@@ -93,21 +106,25 @@ class TypingResultController extends Controller
             return response()->json([
                 'best_wpm' => 0,
                 'avg_accuracy' => 0,
-                'total_tests' => 0
+                'total_tests' => 0,
+                'top_results' => [],
             ]);
         }
 
-        return response()->json($stats);
+        $topResults = TypingResult::where('user_id', $user->id)
+            ->orderByDesc('wpm')
+            ->limit(10)
+            ->get(['wpm', 'accuracy', 'created_at']);
+
+        return response()->json([
+            'best_wpm' => $stats->best_wpm,
+            'avg_accuracy' => $stats->avg_accuracy,
+            'total_tests' => $stats->total_tests,
+            'last_test_at' => $stats->last_test_at,
+            'top_results' => $topResults,
+        ]);
     }
-        public function leaderboard()
-    {
-    $leaders = UserStat::with('user')->orderBy('best_wpm', 'desc')->limit(10)->get();
-
-
-        return response()->json(['data' => $leaders]);
-    }
-
-        private function filterWords(array $words): array
+    private function filterWords(array $words): array
     {
         return array_values(array_filter($words, function($word) {
             return preg_match('/^[а-яёa-z]+$/iu', $word);
@@ -225,7 +242,7 @@ class TypingResultController extends Controller
         $lang = $request->query('lang', 'en');
         $count = (int) $request->query('count', 35);
         $words = $this->loadDictionary($lang);
-
+        
         if (empty($words)) {
             return response()->json(['error' => 'Словарь для выбранного языка не найден.'], 404);
         }

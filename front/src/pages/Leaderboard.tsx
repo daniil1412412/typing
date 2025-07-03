@@ -15,7 +15,9 @@ import axios from 'axios';
 
 interface LeaderboardEntry {
   user_id: number;
-  max_wpm: number;
+  wpm: number;
+  test_type: string;
+  duration: number;
   user: {
     id: number;
     name: string;
@@ -87,6 +89,8 @@ const Leaderboard: React.FC = () => {
                 <TableCell sx={{ color: '#0d47a1' }}>Место</TableCell>
                 <TableCell sx={{ color: '#0d47a1' }}>Пользователь</TableCell>
                 <TableCell sx={{ color: '#0d47a1' }}>WPM</TableCell>
+                <TableCell sx={{ color: '#0d47a1' }}>Тип теста</TableCell>
+                <TableCell sx={{ color: '#0d47a1' }}>Время</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -95,12 +99,16 @@ const Leaderboard: React.FC = () => {
                   <TableRow key={entry.user_id}>
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{entry.user.name}</TableCell>
-                    <TableCell>{entry.max_wpm}</TableCell>
+                    <TableCell>{entry.wpm}</TableCell>
+                    <TableCell>{entry.test_type}</TableCell>
+                    <TableCell>
+                      {entry.test_type === 'timed' ? `${entry.duration} сек.` : '-'}
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} align="center" sx={{ color: '#f44336' }}>
+                  <TableCell colSpan={5} align="center" sx={{ color: '#f44336' }}>
                     Пока нет данных
                   </TableCell>
                 </TableRow>

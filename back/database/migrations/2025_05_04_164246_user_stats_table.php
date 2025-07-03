@@ -18,9 +18,9 @@ return new class extends Migration
             $table->integer('best_wpm')->default(0);
             $table->float('avg_accuracy')->default(0);
             $table->timestamp('last_test_at')->nullable();
-
             $table->integer('errors')->default(0);
             $table->integer('duration')->default(60);
+            $table->string('test_type');
             $table->timestamps();
         });
     }

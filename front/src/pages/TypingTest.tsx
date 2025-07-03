@@ -8,6 +8,8 @@ import {
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
+import '../assets/Tooltip.css';
+
 
 const api = axios.create({
   baseURL: 'http://localhost:8000/api',
@@ -242,47 +244,69 @@ const generateNumberText = async () => {
 
   useEffect(() => {
     const saveResult = async () => {
-      if (!finished || userInput.length === 0) return;
+  if (!finished || userInput.length === 0) return;
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.log('Пользователь не авторизован. Результаты не будут сохранены.');
-        return;
+  const token = localStorage.getItem('token');
+  console.log('Токен для отладки:', token);
+  
+  if (!token) {
+    console.log('Пользователь не авторизован. Результаты не будут сохранены.');
+    return;
+  }
+
+  try {
+    setIsLoading(true);
+    const preparedErrorLog = prepareErrorLog(errorLog);
+    const tokenParts = token.split('.');
+    if (tokenParts.length === 3) {
+      const payload = JSON.parse(atob(tokenParts[1]));
+      if (payload.exp * 1000 < Date.now()) {
+        throw new Error('Токен просрочен');
       }
+    }
 
-      try {
-        setIsLoading(true);
-        const preparedErrorLog = prepareErrorLog(errorLog);
-
-        const response = await api.post(
-          '/save-result',
-          {
-            wpm: getWPM(),
-            accuracy: getAccuracy(),
-            errors,
-            duration,
-            raw_text: text,
-            input_text: userInput,
-            error_log: preparedErrorLog,
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        console.log('Результаты сохранены:', response.data);
-      } catch (err) {
-        let errorMessage = 'Ошибка при сохранении результатов';
-        if (axios.isAxiosError(err)) {
-          errorMessage = err.response?.data?.message || err.message;
-        } else if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-        setApiError(errorMessage);
-        console.error('Ошибка сохранения:', err);
-      } finally {
-        setIsLoading(false);
+    const response = await api.post(
+      '/save-result',
+      {
+        wpm: getWPM(),
+        accuracy: getAccuracy(),
+        errors,
+        duration,
+        raw_text: text,
+        input_text: userInput,
+        test_type: mode,
+        error_log: preparedErrorLog,
+      },
+      {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        withCredentials: true
       }
-    };
+    );
+    
+    console.log('Результаты сохранены:', response.data);
+  } catch (err) {
+    let errorMessage = 'Ошибка при сохранении результатов';
+    if (axios.isAxiosError(err)) {
+      errorMessage = err.response?.data?.message || err.message;
+      if (err.response?.status === 401) {
+        errorMessage = 'Сессия истекла. Пожалуйста, войдите снова.';
+        localStorage.removeItem('token');
+        // Перенаправление на страницу входа
+        window.location.href = '/login';
+      }
+    } else if (err instanceof Error) {
+      errorMessage = err.message;
+    }
+    setApiError(errorMessage);
+    console.error('Ошибка сохранения:', err);
+  } finally {
+    setIsLoading(false);
+  }
+};
     saveResult();
   }, [finished]);
   return (
@@ -413,7 +437,15 @@ const generateNumberText = async () => {
       )}
       {finished && (
         <Box sx={{ textAlign: 'center', mt: 3 }}>
-          <Typography sx={pixelFont}>WPM: {getWPM()}</Typography>
+            <div className="wpm-tooltip" style={{ display: 'inline-block' }}>
+              <Typography sx={pixelFont}>WPM: {getWPM()}</Typography>
+                  <span className="tooltip-text" style={pixelFont}>
+                    WPM = Words Per Minute (Слов в минуту)<br />
+                    Расчет: (Слова / Время) * 60<br />
+                    Слово = 5 символов
+                  </span>
+            </div>
+            
           <Typography sx={pixelFont}>Точность: {getAccuracy()}%</Typography>
           <Typography sx={pixelFont}>Ошибки: {errors}</Typography>
           {mode === 'timed' && (
